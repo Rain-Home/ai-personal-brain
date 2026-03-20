@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Locale } from "@/types";
 import { getTranslations } from "@/lib/i18n";
 import { useNotes } from "@/hooks/use-notes";
+import { useSettings } from "@/hooks/use-settings";
 import { Sidebar } from "@/components/sidebar";
 import { NoteEditor } from "@/components/note-editor";
 import { EmptyState } from "@/components/empty-state";
@@ -30,6 +31,8 @@ export default function Home() {
     allTags,
     isHydrated,
   } = useNotes();
+
+  const { settings, updateSettings, resetSettings } = useSettings();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [locale, setLocale] = useState<Locale>("en");
@@ -110,6 +113,9 @@ export default function Home() {
           allTags={allTags}
           locale={locale}
           onLocaleChange={handleLocaleChange}
+          settings={settings}
+          onUpdateSettings={updateSettings}
+          onResetSettings={resetSettings}
           t={t}
         />
       </aside>
@@ -142,6 +148,7 @@ export default function Home() {
               onUpdate={updateNote}
               onDelete={removeNote}
               onSelectNote={handleSelectNote}
+              settings={settings}
               t={t}
             />
           ) : (

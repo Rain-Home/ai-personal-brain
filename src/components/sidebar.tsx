@@ -1,16 +1,19 @@
 "use client";
 
-import { Plus, Brain } from "lucide-react";
+import { useState } from "react";
+import { Plus, Brain, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Note, SidebarView, Locale } from "@/types";
+import { AISettings } from "@/hooks/use-settings";
 import { Translations } from "@/lib/i18n";
 import { SearchBar } from "./search-bar";
 import { NoteList } from "./note-list";
 import { TagsCloud } from "./tags-cloud";
 import { ThemeToggle } from "./theme-toggle";
 import { LocaleSwitcher } from "./locale-switcher";
+import { SettingsDialog } from "./settings-dialog";
 
 interface SidebarProps {
   notes: Note[];
@@ -24,6 +27,9 @@ interface SidebarProps {
   allTags: Map<string, number>;
   locale: Locale;
   onLocaleChange: (l: Locale) => void;
+  settings: AISettings;
+  onUpdateSettings: (partial: Partial<AISettings>) => void;
+  onResetSettings: () => void;
   t: Translations;
 }
 
@@ -39,8 +45,13 @@ export function Sidebar({
   allTags,
   locale,
   onLocaleChange,
+  settings,
+  onUpdateSettings,
+  onResetSettings,
   t,
 }: SidebarProps) {
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
   const handleTagClick = (tag: string) => {
     onSearchChange(tag);
     onViewChange("all");
@@ -112,10 +123,27 @@ export function Sidebar({
           {t.noteCount(notes.length)}
         </span>
         <div className="flex items-center gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
           <LocaleSwitcher locale={locale} onLocaleChange={onLocaleChange} />
           <ThemeToggle t={t} />
         </div>
       </div>
+
+      <SettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        settings={settings}
+        onUpdate={onUpdateSettings}
+        onReset={onResetSettings}
+        t={t}
+      />
     </div>
   );
 }

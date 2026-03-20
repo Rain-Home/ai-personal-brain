@@ -1,19 +1,33 @@
 import { Note } from "@/types";
+import { AISettings } from "@/hooks/use-settings";
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+async function callAI(prompt: string, settings: AISettings): Promise<string> {
+  const res = await fetch(
+    `${settings.baseUrl.replace(/\/+$/, "")}/v1/chat/completions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${settings.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: settings.modelName,
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.3,
+      }),
+    },
+  );
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`AI request failed (${res.status}): ${body}`);
+  }
+  const data = await res.json();
+  return data.choices[0].message.content;
 }
 
-/**
- * Placeholder for a real LLM call.
- * Replace the body of this function with an actual API request
- * (e.g. OpenAI, DeepSeek) when ready — the rest of the app
- * consumes only generateTags / generateSummary / findRelatedNotes.
- */
-export async function callAI(_prompt: string): Promise<string> {
-  await delay(300 + Math.random() * 500);
-  return "";
-}
+// ---------------------------------------------------------------------------
+// Local fallbacks (used when no API key is configured or on failure)
+// ---------------------------------------------------------------------------
 
 const STOP_WORDS = new Set([
   "the", "a", "an", "is", "it", "to", "in", "for", "of", "and",
@@ -49,16 +63,7 @@ function extractKeywords(text: string): string[] {
     .map(([word]) => word);
 }
 
-export async function generateTags(content: string): Promise<string[]> {
-  await delay(300 + Math.random() * 500);
-  if (!content.trim()) return [];
-  return extractKeywords(content).slice(0, 5);
-}
-
-export async function generateSummary(content: string): Promise<string> {
-  await delay(400 + Math.random() * 400);
-  if (!content.trim()) return "";
-
+function localSummary(content: string): string {
   const sentences = content
     .replace(/\n+/g, " ")
     .replace(/[#*_`>\-\[\]()]/g, "")
@@ -72,12 +77,68 @@ export async function generateSummary(content: string): Promise<string> {
   return summary.length > 150 ? summary.slice(0, 147) + "..." : summary + ".";
 }
 
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+export function localGenerateTags(content: string): string[] {
+  if (!content.trim()) return [];
+  return extractKeywords(content).slice(0, 5);
+}
+
+export async function generateTags(
+  content: string,
+  settings: AISettings,
+): Promise<string[]> {
+  if (!content.trim()) return [];
+
+  if (!settings.apiKey) return localGenerateTags(content);
+
+  try {
+    const response = await callAI(
+      `Extract 3-5 keywords/tags from the following note. Return ONLY a JSON array of lowercase strings, no explanation.\n\nNote:\n${content}`,
+      settings,
+    );
+
+    const match = response.match(/\[[\s\S]*?\]/);
+    if (match) {
+      const tags = JSON.parse(match[0]) as string[];
+      return tags
+        .filter((t): t is string => typeof t === "string")
+        .map((t) => t.toLowerCase().trim())
+        .filter((t) => t.length > 0)
+        .slice(0, 5);
+    }
+    return localGenerateTags(content);
+  } catch {
+    return localGenerateTags(content);
+  }
+}
+
+export async function summarizeNote(
+  content: string,
+  settings: AISettings,
+): Promise<string> {
+  if (!content.trim()) return "";
+
+  if (!settings.apiKey) return localSummary(content);
+
+  try {
+    const response = await callAI(
+      `Provide a concise 1-sentence summary of the following note. Return ONLY the summary sentence, nothing else.\n\nNote:\n${content}`,
+      settings,
+    );
+    const trimmed = response.trim();
+    return trimmed || localSummary(content);
+  } catch {
+    return localSummary(content);
+  }
+}
+
 export async function findRelatedNotes(
   noteId: string,
   allNotes: Note[],
 ): Promise<Note[]> {
-  await delay(200 + Math.random() * 300);
-
   const current = allNotes.find((n) => n.id === noteId);
   if (!current) return [];
 

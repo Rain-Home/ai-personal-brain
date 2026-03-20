@@ -24,8 +24,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Note } from "@/types";
+import { AISettings } from "@/hooks/use-settings";
 import { Translations, formatRelativeTime } from "@/lib/i18n";
-import { generateTags, generateSummary } from "@/lib/ai-service";
+import { generateTags, summarizeNote, localGenerateTags } from "@/lib/ai-service";
 import { useDebounce } from "@/hooks/use-debounce";
 import { MarkdownPreview } from "./markdown-preview";
 import { RelatedNotes } from "./related-notes";
@@ -36,6 +37,7 @@ interface NoteEditorProps {
   onUpdate: (id: string, updates: Partial<Omit<Note, "id" | "createdAt">>) => void;
   onDelete: (id: string) => void;
   onSelectNote: (id: string) => void;
+  settings: AISettings;
   t: Translations;
 }
 
@@ -45,12 +47,14 @@ export function NoteEditor({
   onUpdate,
   onDelete,
   onSelectNote,
+  settings,
   t,
 }: NoteEditorProps) {
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content);
   const [mode, setMode] = useState<"edit" | "preview">("edit");
   const [isSummarizing, setIsSummarizing] = useState(false);
+  const [isTagging, setIsTagging] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const debouncedTitle = useDebounce(title, 500);
@@ -70,19 +74,26 @@ export function NoteEditor({
     onUpdate(note.id, { title: debouncedTitle, content: debouncedContent });
 
     if (debouncedContent.trim()) {
-      generateTags(debouncedContent).then((tags) => {
-        onUpdate(note.id, { tags });
-      });
+      const tags = localGenerateTags(debouncedContent);
+      onUpdate(note.id, { tags });
     }
   }, [debouncedTitle, debouncedContent]);
 
   const handleSummarize = useCallback(async () => {
     if (!content.trim()) return;
     setIsSummarizing(true);
-    const summary = await generateSummary(content);
+    const summary = await summarizeNote(content, settings);
     onUpdate(note.id, { summary });
     setIsSummarizing(false);
-  }, [content, note.id, onUpdate]);
+  }, [content, note.id, onUpdate, settings]);
+
+  const handleAITag = useCallback(async () => {
+    if (!content.trim()) return;
+    setIsTagging(true);
+    const tags = await generateTags(content, settings);
+    onUpdate(note.id, { tags });
+    setIsTagging(false);
+  }, [content, note.id, onUpdate, settings]);
 
   const handleDelete = () => {
     setDeleteOpen(false);
@@ -100,7 +111,8 @@ export function NoteEditor({
         e.preventDefault();
         onUpdate(note.id, { title, content });
         if (content.trim()) {
-          generateTags(content).then((tags) => onUpdate(note.id, { tags }));
+          const tags = localGenerateTags(content);
+          onUpdate(note.id, { tags });
         }
       }
     };
@@ -134,6 +146,21 @@ export function NoteEditor({
         </div>
 
         <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1.5 text-xs"
+            onClick={handleAITag}
+            disabled={isTagging || !content.trim()}
+          >
+            {isTagging ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Tag className="h-3.5 w-3.5" />
+            )}
+            {isTagging ? t.generating : t.aiTag}
+          </Button>
+
           <Button
             variant="ghost"
             size="sm"
