@@ -117,6 +117,8 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+@plugin "@tailwindcss/typography";
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -126,5 +128,41 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+@layer components {
+  .prose {
+    --tw-prose-body: var(--foreground);
+    --tw-prose-headings: var(--foreground);
+    --tw-prose-links: var(--primary);
+    --tw-prose-code: var(--foreground);
+    --tw-prose-pre-bg: var(--muted);
+    --tw-prose-pre-code: var(--foreground);
+    --tw-prose-quotes: var(--muted-foreground);
+    --tw-prose-quote-borders: var(--border);
+    --tw-prose-hr: var(--border);
+  }
+
+  .prose pre {
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+  }
+
+  .prose code::before,
+  .prose code::after {
+    content: none;
+  }
+
+  .prose :where(code):not(:where(pre *)) {
+    padding: 0.15em 0.35em;
+    border-radius: calc(var(--radius) * 0.6);
+    background: var(--muted);
+    font-size: 0.85em;
+    font-weight: 500;
+  }
+
+  .prose img {
+    border-radius: var(--radius);
   }
 }
