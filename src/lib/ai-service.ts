@@ -112,7 +112,6 @@ export async function generateTags(
   - domain: Industry/Field (e.g. "EdTech", "Photography")
   - tech: Specific technology (e.g. "LLM", "RAG", "Next.js")
   - action: Nature of the note (e.g. "Interview Prep", "Methodology", "Brainstorm")
-  - project: Associated project (e.g. "MA-3WD", "ByteDance Internship")
 - "conceptSummary": a single sentence summarizing the core concept of the note.
 
 Return ONLY valid JSON, no markdown fences, no explanation.`;
