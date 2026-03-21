@@ -32,6 +32,7 @@ export function useNotes() {
       updatedAt: now,
       tags: [],
       summary: "",
+      aiTags: [],
     };
     storage.saveNote(note);
     setNotes((prev) => [note, ...prev]);

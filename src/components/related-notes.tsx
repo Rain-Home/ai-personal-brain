@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Sparkles, FileText, Loader2 } from "lucide-react";
-import { Note } from "@/types";
+import { Note, RelatedNoteResult } from "@/types";
 import { findRelatedNotes } from "@/lib/ai-service";
 import { Translations } from "@/lib/i18n";
 
@@ -19,7 +19,7 @@ export function RelatedNotes({
   onSelect,
   t,
 }: RelatedNotesProps) {
-  const [related, setRelated] = useState<Note[]>([]);
+  const [related, setRelated] = useState<RelatedNoteResult[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -54,16 +54,23 @@ export function RelatedNotes({
         <p className="py-2 text-xs text-muted-foreground">{t.noRelated}</p>
       ) : (
         <div className="space-y-1">
-          {related.map((note) => (
+          {related.map((result) => (
             <button
-              key={note.id}
-              onClick={() => onSelect(note.id)}
-              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-accent"
+              key={result.note.id}
+              onClick={() => onSelect(result.note.id)}
+              className="flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-accent"
             >
-              <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              <span className="truncate">
-                {note.title || t.untitledNote}
-              </span>
+              <div className="flex items-center gap-2">
+                <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span className="truncate">
+                  {result.note.title || t.untitledNote}
+                </span>
+              </div>
+              {result.reason && (
+                <p className="truncate pl-[22px] text-[10px] italic text-muted-foreground/70">
+                  {result.reason}
+                </p>
+              )}
             </button>
           ))}
         </div>

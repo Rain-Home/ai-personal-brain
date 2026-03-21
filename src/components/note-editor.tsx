@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Eye,
   Pencil,
@@ -10,9 +10,11 @@ import {
   Clock,
   Calendar,
   Tag,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import {
   Dialog,
@@ -26,8 +28,7 @@ import {
 import { Note } from "@/types";
 import { AISettings } from "@/hooks/use-settings";
 import { Translations, formatRelativeTime } from "@/lib/i18n";
-import { generateTags, summarizeNote, localGenerateTags } from "@/lib/ai-service";
-import { useDebounce } from "@/hooks/use-debounce";
+import { generateTags, summarizeNote } from "@/lib/ai-service";
 import { MarkdownPreview } from "./markdown-preview";
 import { RelatedNotes } from "./related-notes";
 
@@ -56,9 +57,8 @@ export function NoteEditor({
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [isTagging, setIsTagging] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-
-  const debouncedTitle = useDebounce(title, 500);
-  const debouncedContent = useDebounce(content, 500);
+  const [tagInput, setTagInput] = useState("");
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setTitle(note.title);
@@ -67,17 +67,17 @@ export function NoteEditor({
   }, [note.id]);
 
   useEffect(() => {
-    if (debouncedTitle === note.title && debouncedContent === note.content) {
-      return;
-    }
+    if (title === note.title && content === note.content) return;
 
-    onUpdate(note.id, { title: debouncedTitle, content: debouncedContent });
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      onUpdate(note.id, { title, content });
+    }, 500);
 
-    if (debouncedContent.trim()) {
-      const tags = localGenerateTags(debouncedContent);
-      onUpdate(note.id, { tags });
-    }
-  }, [debouncedTitle, debouncedContent]);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [title, content, note.id, note.title, note.content, onUpdate]);
 
   const handleSummarize = useCallback(async () => {
     if (!content.trim()) return;
@@ -90,8 +90,8 @@ export function NoteEditor({
   const handleAITag = useCallback(async () => {
     if (!content.trim()) return;
     setIsTagging(true);
-    const tags = await generateTags(content, settings);
-    onUpdate(note.id, { tags });
+    const { aiTags, conceptSummary } = await generateTags(content, settings);
+    onUpdate(note.id, { aiTags, conceptSummary });
     setIsTagging(false);
   }, [content, note.id, onUpdate, settings]);
 
@@ -110,10 +110,6 @@ export function NoteEditor({
       if (isMod && e.key === "s") {
         e.preventDefault();
         onUpdate(note.id, { title, content });
-        if (content.trim()) {
-          const tags = localGenerateTags(content);
-          onUpdate(note.id, { tags });
-        }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -235,6 +231,17 @@ export function NoteEditor({
             </div>
           )}
 
+          {/* Concept Summary */}
+          {note.conceptSummary && (
+            <div className="mb-4 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-primary/70">
+                <Sparkles className="h-3 w-3" />
+                {t.conceptSummary}
+              </div>
+              <p className="mt-1 text-sm italic">{note.conceptSummary}</p>
+            </div>
+          )}
+
           {/* Content area */}
           {mode === "edit" ? (
             <textarea
@@ -267,24 +274,82 @@ export function NoteEditor({
 
             <Separator />
 
-            {/* Tags */}
+            {/* User Tags */}
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                 <Tag className="h-3.5 w-3.5" />
-                {t.generatedTags}
+                {t.tags}
               </div>
-              {note.tags.length > 0 ? (
+              {note.tags.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {note.tags.map((tag) => (
-                    <Badge key={tag} variant="secondary" className="text-xs">
+                    <Badge
+                      key={tag}
+                      variant="secondary"
+                      className="gap-0.5 pr-1 text-xs"
+                    >
                       {tag}
+                      <button
+                        type="button"
+                        className="ml-0.5 rounded-full p-0.5 hover:bg-muted-foreground/20"
+                        onClick={() =>
+                          onUpdate(note.id, {
+                            tags: note.tags.filter((t) => t !== tag),
+                          })
+                        }
+                      >
+                        <X className="h-2.5 w-2.5" />
+                      </button>
                     </Badge>
                   ))}
                 </div>
-              ) : (
-                <p className="text-xs text-muted-foreground">—</p>
               )}
+              <Input
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === ",") {
+                    e.preventDefault();
+                    const value = tagInput.replace(/,/g, "").trim();
+                    if (
+                      value &&
+                      !note.tags.some(
+                        (t) => t.toLowerCase() === value.toLowerCase(),
+                      )
+                    ) {
+                      onUpdate(note.id, { tags: [...note.tags, value] });
+                    }
+                    setTagInput("");
+                  }
+                }}
+                placeholder={t.addTag}
+                className="h-7 text-xs"
+              />
             </div>
+
+            {/* AI Tags */}
+            {note.aiTags.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-xs font-medium text-primary/70">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {t.generatedTags}
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {note.aiTags.map((tag) => (
+                    <Badge
+                      key={tag.label}
+                      variant="outline"
+                      className="gap-1 text-xs"
+                    >
+                      <span className="text-[10px] text-muted-foreground">
+                        {tag.category}
+                      </span>
+                      {tag.label}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <Separator />
 

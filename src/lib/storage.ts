@@ -1,23 +1,67 @@
 import { Note } from "@/types";
+import { INITIAL_NOTES, SEED_VERSION } from "@/constants/seed-data";
 
 const STORAGE_KEY = "kb-notes";
 const SCHEMA_VERSION_KEY = "kb-schema-version";
-const CURRENT_SCHEMA_VERSION = 1;
+const SEED_VERSION_KEY = "kb-seed-version";
+const CURRENT_SCHEMA_VERSION = 2;
 
-function ensureSchemaVersion(): void {
-  const version = localStorage.getItem(SCHEMA_VERSION_KEY);
-  if (version !== String(CURRENT_SCHEMA_VERSION)) {
-    localStorage.setItem(SCHEMA_VERSION_KEY, String(CURRENT_SCHEMA_VERSION));
+function migrateNotes(): void {
+  const version = Number(localStorage.getItem(SCHEMA_VERSION_KEY) ?? "0");
+  if (version >= CURRENT_SCHEMA_VERSION) return;
+
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (raw) {
+    try {
+      const notes = JSON.parse(raw) as Record<string, unknown>[];
+      const migrated = notes.map((n) => ({
+        ...n,
+        aiTags: Array.isArray(n.aiTags) ? n.aiTags : [],
+      }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+    } catch {
+      // corrupted data – leave as-is; getNotes will return []
+    }
   }
+
+  localStorage.setItem(SCHEMA_VERSION_KEY, String(CURRENT_SCHEMA_VERSION));
+}
+
+function seedInitialNotes(existing: Note[]): Note[] {
+  const localVersion = Number(localStorage.getItem(SEED_VERSION_KEY) ?? "0");
+  if (localVersion >= SEED_VERSION) return existing;
+
+  const existingTitles = new Set(existing.map((n) => n.title));
+  const now = new Date().toISOString();
+
+  const newNotes: Note[] = INITIAL_NOTES
+    .filter((n) => !existingTitles.has(n.title))
+    .map(({ seedKey: _, ...rest }) => ({
+      ...rest,
+      id: crypto.randomUUID(),
+      createdAt: now,
+      updatedAt: now,
+    }));
+
+  if (newNotes.length > 0) {
+    const merged = [...newNotes, ...existing];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+    localStorage.setItem(SEED_VERSION_KEY, String(SEED_VERSION));
+    return merged;
+  }
+
+  localStorage.setItem(SEED_VERSION_KEY, String(SEED_VERSION));
+  return existing;
 }
 
 export function getNotes(): Note[] {
   if (typeof window === "undefined") return [];
-  ensureSchemaVersion();
+  migrateNotes();
   const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return [];
+  if (!raw) return seedInitialNotes([]);
   try {
-    return JSON.parse(raw) as Note[];
+    const notes = JSON.parse(raw) as Note[];
+    return seedInitialNotes(notes);
   } catch {
     return [];
   }
